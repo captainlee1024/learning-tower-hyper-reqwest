@@ -22,30 +22,19 @@ docker stop jaeger
 docker start jaeger
 ```
 
-2、launch the echo server:
-
-```bash
-cargo run
-```
-
-3、test with curl:
-
-```bash
-curl -v -X POST -H "Authorization: Bearer token" -d "hello world" http://127.0.0.1:3000
-```
-
-4、check the trace in Jaeger UI:
-
-[open Jaeger UI in browser](http://localhost:16686/)
-
-select the Service name `hyper-tower-service` and select the Operation name `request`, click `Find Traces` to see the
-traces.
-
-5、launch the prometheus using docker:
+2、launch the prometheus using docker:
 
 ```bash
 chmod -R 777 prometheus-data
 ```
+
+delete the prometheus data:
+
+```bash
+sudo rm -rf prometheus-data/*
+```
+
+launch prometheus:
 
 ```bash
 docker run -d \
@@ -59,11 +48,24 @@ docker run -d \
   --enable-feature=otlp-write-receiver
 ```
 
-delete the prometheus data:
+3、launch the echo server:
 
 ```bash
-sudo rm -rf prometheus-data/*
+cargo run
 ```
+
+4、test with curl:
+
+```bash
+curl -v -X POST -H "Authorization: Bearer token" -d "hello world" http://127.0.0.1:3000
+```
+
+5、check the trace in Jaeger UI:
+
+[open Jaeger UI in browser](http://localhost:16686/)
+
+select the Service name `hyper-tower-service` and select the Operation name `request`, click `Find Traces` to see the
+traces.
 
 6、 check the metrics in prometheus:
 
