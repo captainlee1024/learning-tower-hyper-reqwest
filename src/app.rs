@@ -25,7 +25,7 @@ use tracing::{Span, info, instrument};
 // }
 // #[instrument(skip(req), fields(layer = "auth"))]
 // #[instrument(name = "echo", skip(req))]
-#[instrument(skip(req), fields(layer = "echo"))]
+#[instrument(skip(req), fields(layer = "echo"), target = "service::echo")]
 pub async fn echo(
     req: Request<hyper::body::Incoming>,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {

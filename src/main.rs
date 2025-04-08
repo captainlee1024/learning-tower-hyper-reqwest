@@ -2,31 +2,82 @@ mod app;
 mod middleware;
 
 use crate::app::echo;
+// use futures::SinkExt;
 use hyper::server::conn::http1;
 use hyper_util::rt::TokioIo;
 use hyper_util::service::TowerToHyperService;
+use opentelemetry::trace::TracerProvider;
+use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_sdk::Resource;
+// use opentelemetry_sdk::resource::ResourceBuilder;
 use std::net::SocketAddr;
 // use hyper::server::Server;
 // use hyper::service::make_service_fn;
 use tokio::net::TcpListener;
 use tower::{ServiceBuilder, service_fn};
+// use tracing::instrument::WithSubscriber;
+// use tracing_opentelemetry::OpenTelemetryLayer;
+// use tracing_subscriber::fmt::writer::MakeWriterExt;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::{Layer, Registry};
+
 // use tracing_opentelemetry::OpenTelemetryLayer;
 // use tracing_subscriber::Registry;
 // use tracing_subscriber::layer::SubscriberExt;
 
+/// # hyper-tower-echo-demo
+///
 /// A simple echo server using hyper and tower
 ///
-/// how to run:
+/// ## how to use:
+///
+/// 1、launch the Jaeger agent using docker:
+///
+/// ```bash
+/// docker run -d --name jaeger \
+/// -e COLLECTOR_OTLP_ENABLED=true \
+/// -p 6831:6831/udp \
+/// -p 16686:16686 \
+/// -p 4317:4317 \
+/// jaegertracing/all-in-one:latest
+/// ```
+///
+/// stop and restart the Jaeger agent:
+///
+/// ```bash
+/// docker stop jaeger
+/// docker start jaeger
+/// ```
+///
+/// 2、launch the echo server:
+///
 /// ```bash
 /// cargo run
 /// ```
 ///
-/// test with curl:
+/// 3、test with curl:
+///
 /// ```bash
 /// curl -v -X POST -H "Authorization: Bearer token" -d "hello world" http://127.0.0.1:3000
 /// ```
+///
+/// 4、check the trace in Jaeger UI:
+///
+/// [open Jaeger UI in browser](http://localhost:16686/)
+///
+/// select the Service name `hyper-tower-service` and select the Operation name `request`, click `Find Traces` to see the
+/// traces.
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // // 初始化 Tracing
+    // tracing_subscriber::fmt()
+    //     .with_max_level(tracing::Level::INFO) // 设置日志级别
+    //     // .with_span_events(tracing_subscriber::fmt::format::FmtSpan::FULL)
+    //     .init(); // 初始化控制台输出
+    //
+    // 初始化Tracing和OpenTelemetry
+    init_tracing().await?;
+
     // 初始化 tracing + OTEL
     // let tracer = opentelemetry_jaeger::new_pipeline()
 
@@ -42,18 +93,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
 
     let listener = TcpListener::bind(addr).await?;
-    println!("Listening on http://{}", addr);
+
+    tracing::info!(
+        target: "server::startup",
+        service_name = "echo-server",
+        service_protocol = "http",
+        service_address = %addr,
+        "HTTP service is now listening on {} (Powered by hyper and tower), press Ctrl+C to stop",
+        addr
+    );
 
     // let t_service = create_service();
 
     //
     // let t_service = ServiceBuilder::new().service(service_fn(echo));
-
-    // 初始化 Tracing
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO) // 设置日志级别
-        // .with_span_events(tracing_subscriber::fmt::format::FmtSpan::FULL)
-        .init(); // 初始化控制台输出
 
     let t_service = ServiceBuilder::new()
         .layer(middleware::tracing::TracingLayer)
@@ -79,11 +132,99 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .serve_connection(io, cloned_service)
                 .await
             {
-                println!("Error serving connection: {}", err);
+                tracing::error!("Error serving connection: {}", err);
             }
         });
     }
 
     // let make_svc = make_service_fn(|_conn| async { Ok::<_, hyper::Error>(create_service()) });
     // Server::bind(&addr).serve(make_svc).await.unwrap();
+}
+
+// 初始化 Tracing和OpenTelemetry
+async fn init_tracing() -> Result<(), Box<dyn std::error::Error>> {
+    // 配置 OTLP 导出器
+    // Initialize OTLP exporter using gRPC (Tonic)
+    let otlp_exporter = opentelemetry_otlp::SpanExporter::builder()
+        // .with_tonic()
+        // .build()?;
+        .with_tonic()
+        .with_endpoint("http://localhost:4317")
+        .build()?;
+
+    // Create a tracer provider with the exporter
+    // let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+    //     .with_simple_exporter(otlp_exporter)
+    //     .build();
+
+    let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+        .with_batch_exporter(otlp_exporter)
+        .with_resource(
+            Resource::builder()
+                .with_service_name("hyper-tower-service")
+                .build(),
+        )
+        .build();
+    // info!("TracerProvider created");
+
+    // let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+    //     .with_batch_exporter(otlp_exporter, opentelemetry_sdk::runtime::Tokio)
+    //     .with_config(opentelemetry_sdk::trace::Config::default().with_resource(
+    //         opentelemetry_sdk::Resource::new(vec![opentelemetry::KeyValue::new(
+    //             "service.name",
+    //             "hyper-tower-service",
+    //         )]),
+    //     ))
+    //     .build();
+
+    let provider_tracer = tracer_provider.tracer("hyper-tower-service");
+
+    // 设置全局 TracerProvider（追踪）
+    // opentelemetry::global::set_meter_provider(tracer_provider);
+    opentelemetry::global::set_tracer_provider(tracer_provider);
+
+    // 创建 Tracing-OpenTelemetry层
+    // let telemetry_tracer = opentelemetry::global::tracer("hyper-tower-service");
+    // let provider_tracer = tracer_provider.tracer("hyper-tower-service");
+    let telemetry_layer = tracing_opentelemetry::layer().with_tracer(provider_tracer);
+
+    // let telemetry_layer = tracing_opentelemetry::OpenTelemetryLayer::with_tracer(b, ());
+
+    // 配置终端输出
+    let fmt_layer =
+        tracing_subscriber::fmt::layer().with_filter(tracing_subscriber::filter::LevelFilter::INFO);
+    // let fmt_layer = tracing_subscriber::fmt().with_max_level(tracing::Level::INFO);
+    // .with_span_events(tracing_subscriber::fmt::format::FmtSpan::FULL)
+    // .finish();
+
+    // 设置全局 subscriber
+    let subscriber = Registry::default()
+        // .with_subscriber(fmt_layer)
+        .with(fmt_layer) // 终端输出
+        .with(telemetry_layer); // 导出到OTEL
+    tracing::subscriber::set_global_default(subscriber)?;
+
+    tracing::info!(
+        // target: "telemetry::tracing",
+        target: "telemetry::init",
+        telemetry_backend = "tracing",
+        "Tracing initialized"
+    );
+
+    tracing::info!(
+        // target: "telemetry::exporter",
+        target: "telemetry::init",
+        exporter_backend = "opentelemetry",
+        exporter_protocol = "otlp",
+        exporter_destination = "jaeger",
+        exporter_endpoint = "http://localhost:4317",
+        "OTLP exporter initialized and connected to Jaeger grpc endpoint"
+    );
+
+    // tracing::info!("Tracing initialized using OTLP exporter to Jaeger");
+    // tracing::info!(
+    //     "Initializing OTLP exporter and connecting to Jaeger endpoint at http://localhost:4317"
+    // );
+
+    Ok(())
 }

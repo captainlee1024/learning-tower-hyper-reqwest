@@ -10,13 +10,21 @@ tower = { version = "0.5", features = ["retry"] }
 tower-http = { version = "0.6", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
-tracing-opentelemetry = "0.3"
+tracing-opentelemetry = "0.30"
+
 #opentelemetry = { version = "0.2", features = ["full"] }
-opentelemetry = { version = "0.29"}
-opentelemetry-jaeger = "0.22"
+opentelemetry = { version = "0.29", futures = ["full"] }
+
+opentelemetry_sdk = { version = "0.29.0", futures = ["full"] }
+opentelemetry-otlp = { version = "0.29.0", features = ["tonic", "grpc-tonic"] }
+opentelemetry-stdout = { version = "0.29.0" }
+
+# 暂时不需要了，使用OTLP(opentelemetry-otlp)协议与Jaeger进行通信,
+# 不使用Jaeger的Rust SDK与Jaeger原生协议通信
+#opentelemetry-jaeger = "0.22"
 futures = "0.3"
 http = "1.3"
-http-body = { version = "1.0.0"}
+http-body = { version = "1.0.0" }
 http-body-util = { version = "0.1.0" }
 pin-project-lite = "0.2"
 hyper-util = { version = "0.1.11", features = ["tokio", "service"] }
