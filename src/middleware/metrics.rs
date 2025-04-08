@@ -53,7 +53,7 @@ where
             let res = fut.await;
             let elapsed = start.elapsed();
             // event!(Level::INFO, %method, elapsed_ms = elapsed.as_millis(), "Request metrics recorded");
-            event!(Level::INFO, %method, elapsed_us = elapsed.as_micros(), "Request metrics recorded");
+            event!(target: "middleware::metrics", Level::INFO, %method, elapsed_us = elapsed.as_micros(), "Request metrics recorded");
             res
         })
     }

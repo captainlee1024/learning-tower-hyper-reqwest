@@ -9,6 +9,7 @@ use std::task::{Context, Poll};
 use tower::{Layer, Service};
 // use tower_http::body::Full;
 // use http_body_util::Full;
+use tracing::field;
 use tracing::{Level, Span, event, instrument};
 
 #[derive(Clone)]
@@ -52,13 +53,17 @@ where
         self.inner.poll_ready(cx)
     }
 
-    #[instrument(skip(self, req), fields(layer = "auth"))]
+    // FIXME:为什么instrument里的target不生效
+    // #[instrument(skip(self, req), fields(layer = "auth", authorized = field::Empty))]
+    // 修复span.record(), 要提前声明字段才能赋值
+    #[instrument(skip(self, req), fields(layer = "auth", authorized = field::Empty), target = "middleware::auth")]
     fn call(&mut self, req: Request<ReqB>) -> Self::Future {
         let span = Span::current();
         let authorized = req.headers().get("Authorization").is_some();
+        span.record("authorized", &authorized);
 
         if !authorized {
-            span.record("authorized", &false);
+            // span.record("authorized", &false);
             // let response = Response::builder()
             //     .status(StatusCode::UNAUTHORIZED);
 
@@ -69,19 +74,28 @@ where
 
             return Box::pin(async move {
                 // FIXME: 为什么这里的trace输出没有layer="auth"
-                event!(Level::WARN, "Unauthorized request");
+                // event!(Level::WARN, authorized, "Unauthorized request");
                 // 效果同上
                 // warn!("Unauthorized request");
+                //
+                // 在 span 中运行这段逻辑，确保输出 span 字段
+                span.in_scope(|| {
+                    event!(target: "middleware::auth", Level::WARN, authorized, "Unauthorized request");
+                });
                 Ok(res)
             });
         }
 
         let fut = self.inner.call(req);
         Box::pin(async move {
-            span.record("authorized", &true);
-            event!(Level::INFO, "Authorized request");
-            let res = fut.await;
-            res
+            // span.record("authorized", &true);
+            // event!(Level::INFO, authorized, "Authorized request");
+            // 同样包裹在 span 中，记录 INFO 日志, 确保输出 span 字段
+            span.in_scope(|| {
+                event!(target: "middleware::auth", Level::INFO, authorized, "Authorized request");
+            });
+
+            fut.await
         })
     }
 }

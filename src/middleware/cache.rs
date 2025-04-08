@@ -52,7 +52,7 @@ where
 
         Box::pin(async move {
             let res = fut.await;
-            event!(Level::INFO, "Cache checked (no real cache in demo)");
+            event!(target: "middleware::cache", Level::INFO, "Cache checked (no real cache in demo)");
             res
         })
     }

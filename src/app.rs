@@ -47,7 +47,7 @@ pub async fn echo(
                 .map(|byte| byte.to_ascii_uppercase())
                 .collect::<Bytes>();
             // FIXME: Tracing span只会追加到
-            info!("Transformed data: {:?}", uppercased);
+            info!(target: "service::echo", "Transformed data: {:?}", uppercased);
             uppercased
         } else {
             Bytes::new()
