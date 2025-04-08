@@ -40,3 +40,33 @@ curl -v -X POST -H "Authorization: Bearer token" -d "hello world" http://127.0.0
 
 select the Service name `hyper-tower-service` and select the Operation name `request`, click `Find Traces` to see the
 traces.
+
+5、launch the prometheus using docker:
+
+```bash
+chmod -R 777 prometheus-data
+```
+
+```bash
+docker run -d \
+  --name prometheus \
+  --network host \
+  -v $(pwd)/prometheus.yml:/etc/prometheus/prometheus.yml \
+  -v $(pwd)/prometheus-data:/prometheus \
+  prom/prometheus:latest \
+  --web.listen-address=":19090" \
+  --config.file=/etc/prometheus/prometheus.yml \
+  --enable-feature=otlp-write-receiver
+```
+
+delete the prometheus data:
+
+```bash
+sudo rm -rf prometheus-data/*
+```
+
+6、 check the metrics in prometheus:
+
+[open prometheus UI in browser](http://localhost:19090/)
+
+open metrics explorer, select `http_request_total`, `http_request_duration_seconds_bucket` ... to see the metrics.

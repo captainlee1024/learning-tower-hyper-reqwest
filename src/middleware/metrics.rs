@@ -1,5 +1,7 @@
 use http::{Request, Response};
 // use pin_project_lite::pin_project;
+use opentelemetry::KeyValue;
+use opentelemetry::metrics::{Counter, Histogram};
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -13,7 +15,7 @@ impl<S> Layer<S> for MetricsLayer {
     type Service = MetricsMiddleware<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        MetricsMiddleware { inner }
+        MetricsMiddleware::new(inner)
     }
 }
 
@@ -28,6 +30,27 @@ impl<S> Layer<S> for MetricsLayer {
 #[derive(Clone)]
 pub struct MetricsMiddleware<S> {
     inner: S,
+    request_counter: Counter<u64>,
+    request_duration: Histogram<f64>,
+}
+
+impl<S> MetricsMiddleware<S> {
+    pub fn new(inner: S) -> Self {
+        let meter = opentelemetry::global::meter("hyper-tower-service");
+        let request_counter = meter
+            .u64_counter("http_requests_total")
+            .with_description("Total number of HTTP requests")
+            .build();
+        let request_duration = meter
+            .f64_histogram("http_request_duration_seconds")
+            .with_description("HTTP request duration in seconds")
+            .build();
+        Self {
+            inner,
+            request_counter,
+            request_duration,
+        }
+    }
 }
 
 impl<S, ReqB, RespB> Service<Request<ReqB>> for MetricsMiddleware<S>
@@ -48,10 +71,17 @@ where
         let start = Instant::now();
         let method = req.method().to_string();
         let fut = self.inner.call(req);
+        self.request_counter
+            .add(1, &[KeyValue::new("method", method.clone())]);
+        let request_duration = self.request_duration.clone();
 
         Box::pin(async move {
             let res = fut.await;
             let elapsed = start.elapsed();
+            request_duration.record(
+                elapsed.as_millis_f64(),
+                &[KeyValue::new("method", method.clone())],
+            );
             // event!(Level::INFO, %method, elapsed_ms = elapsed.as_millis(), "Request metrics recorded");
             event!(target: "middleware::metrics", Level::INFO, %method, elapsed_us = elapsed.as_micros(), "Request metrics recorded");
             res

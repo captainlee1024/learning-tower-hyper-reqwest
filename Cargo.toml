@@ -16,8 +16,12 @@ tracing-opentelemetry = "0.30"
 opentelemetry = { version = "0.29", futures = ["full"] }
 
 opentelemetry_sdk = { version = "0.29.0", futures = ["full"] }
-opentelemetry-otlp = { version = "0.29.0", features = ["tonic", "grpc-tonic"] }
+opentelemetry-otlp = { version = "0.29.0", features = ["tonic", "grpc-tonic", "metrics"] }
 opentelemetry-stdout = { version = "0.29.0" }
+
+# 已经不需要了，使用OTLP(opentelemetry-otlp)协议与Prometheus进行通信,
+# Prometheus支持OTLP协议
+#opentelemetry-prometheus = "0.29"
 
 # 暂时不需要了，使用OTLP(opentelemetry-otlp)协议与Jaeger进行通信,
 # 不使用Jaeger的Rust SDK与Jaeger原生协议通信
