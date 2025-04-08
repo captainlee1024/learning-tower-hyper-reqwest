@@ -48,6 +48,29 @@ docker run -d \
   --enable-feature=otlp-write-receiver
 ```
 
+3、 launch the grafana using docker:
+
+```bash
+chmod -R 777 grafana-data
+```
+
+delete the grafana data:
+
+```bash
+sudo rm -rf grafana-data/*
+```
+
+launch grafana:
+
+```bash
+docker run -d \
+  --name grafana \
+  --network host \
+  -e "GF_SERVER_HTTP_PORT=13000" \
+  -v $(pwd)/grafana-data:/var/lib/grafana \
+  grafana/grafana:latest
+```
+
 3、launch the echo server:
 
 ```bash
@@ -72,3 +95,31 @@ traces.
 [open prometheus UI in browser](http://localhost:19090/)
 
 open metrics explorer, select `http_request_total`, `http_request_duration_seconds_bucket` ... to see the metrics.
+
+7、 check the metrics in grafana:
+
+[open grafana UI in browser](http://localhost:13000/)
+
+add the prometheus data source: http://localhost:19090
+
+create a new dashboard, add a new panel, select the prometheus data source, and select the metrics you want to see.
+
+Grafana Chart Examples
+
+1. **Request Rate Line Chart (Time Series)**
+    - **Purpose**: Show request rate per second over time.
+    - **Query**: `rate(http_requests_total[5m])`
+        - `rate`: Calculates per-second increase over a 5-minute window.
+    - **Visualization**:
+        - Type: Time Series
+        - Config: X-axis: time, Y-axis: req/s, split by `method`
+    - **Value**: Monitor request trends and detect peaks.
+
+2. **Duration Distribution Histogram (Histogram)**
+    - **Purpose**: Display request duration distribution (your bar chart need).
+    - **Query**: `http_request_duration_seconds_bucket{method="POST"}`
+        - Uses Histogram bucket data directly.
+    - **Visualization**:
+        - Type: Histogram
+        - Config: X-axis: `le` (bucket boundaries), Y-axis: count, unit: milliseconds
+    - **Value**: Understand duration spread, e.g., most requests in low latency.
