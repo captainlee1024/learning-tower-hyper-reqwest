@@ -2,8 +2,11 @@ use http::{Request, Response};
 // use http_body::Body;
 use http_body_util::{BodyExt, combinators::BoxBody};
 use hyper::body::Bytes;
+use tower::BoxError;
 // use tower::ServiceExt;
+use crate::router::BodyString;
 use tracing::{Span, info, instrument};
+
 // pub fn create_service() -> impl tower::Service<
 //     Request<hyper::body::Incoming>,
 //     Response = Response<BoxBody<Bytes, hyper::Error>>,
@@ -60,4 +63,24 @@ pub async fn echo(
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
     Ok(Response::new(frame.boxed()))
+}
+
+#[instrument(skip(req), fields(layer = "echo_v2"), target = "service::echo_v2")]
+pub async fn echo_v2(req: BodyString) -> Result<String, BoxError> {
+    // let span = Span::current();
+
+    let uppercased = req.0.to_uppercase();
+    info!(target: "service::echo", "Transformed data: {}", uppercased);
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    // 用于测试timeout middleware
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    Ok(uppercased)
+}
+
+#[instrument(skip(_req), fields(layer = "health"), target = "service::health")]
+pub async fn health(_req: BodyString) -> Result<String, BoxError> {
+    info!(target: "service::health", "Health check");
+    Ok("OK".to_string())
 }

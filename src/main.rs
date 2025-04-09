@@ -1,9 +1,11 @@
 #![feature(duration_millis_float)]
+#![allow(warnings)]
 
 mod app;
 mod middleware;
+mod router;
 
-use crate::app::echo;
+use crate::app::{echo, echo_v2, health};
 // use futures::SinkExt;
 use hyper::server::conn::http1;
 use hyper_util::rt::TokioIo;
@@ -12,6 +14,7 @@ use opentelemetry::trace::TracerProvider;
 use opentelemetry_otlp::{Protocol, WithExportConfig};
 use opentelemetry_sdk::Resource;
 // use opentelemetry_sdk::resource::ResourceBuilder;
+use futures::future::BoxFuture;
 use opentelemetry::global;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::trace::SdkTracerProvider;
@@ -23,13 +26,13 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::net::TcpListener;
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::Notify;
-use tower::{ServiceBuilder, service_fn};
+use tower::{BoxError, ServiceBuilder, ServiceExt, service_fn};
 // use tracing::instrument::WithSubscriber;
 // use tracing_opentelemetry::OpenTelemetryLayer;
 // use tracing_subscriber::fmt::writer::MakeWriterExt;
+use crate::router::{BodyString, ExtractService, Router};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{Layer, Registry};
-
 // use tracing_opentelemetry::OpenTelemetryLayer;
 // use tracing_subscriber::Registry;
 // use tracing_subscriber::layer::SubscriberExt;
@@ -256,15 +259,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         shutdown_clone.notify_one();
     });
 
+    // let router = Router::new()
+    let router: Router<
+        ExtractService<
+            tower::util::ServiceFn<fn(BodyString) -> BoxFuture<'static, Result<String, BoxError>>>,
+            BodyString,
+        >,
+    > = Router::new()
+        .post("/echo", service_fn(echo_v2))
+        .get("/health", service_fn(health));
+
     let t_service = ServiceBuilder::new()
-        .layer(middleware::tracing::TracingLayer)
-        .layer(middleware::metrics::MetricsLayer)
-        .layer(middleware::auth::AuthLayer)
-        // FIXME: 这里的body limit 中间件会导致Service<Request<Limited<ReqBody>> Request类型不一致
-        // .layer(middleware::ratelimit::ratelimit_layer())
-        .layer(middleware::cache::CacheLayer)
-        .layer(middleware::timeout::timeout_layer())
-        .service(service_fn(echo));
+        // .layer(middleware::tracing::TracingLayer)
+        // .layer(middleware::metrics::MetricsLayer)
+        // .layer(middleware::auth::AuthLayer)
+        // // FIXME: 这里的body limit 中间件会导致Service<Request<Limited<ReqBody>> Request类型不一致
+        // // .layer(middleware::ratelimit::ratelimit_layer())
+        // .layer(middleware::cache::CacheLayer)
+        // .layer(middleware::timeout::timeout_layer())
+        .service(router);
 
     // TowerToHyperService<ServiceFn<fn(Request<Incoming>) ->impl Future<Output = Result<Response<BoxBody<Bytes, Error>>, Error>> + Sized>>>
     let h_service = TowerToHyperService::new(t_service);
