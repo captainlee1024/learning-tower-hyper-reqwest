@@ -14,10 +14,15 @@ use opentelemetry_sdk::Resource;
 // use opentelemetry_sdk::resource::ResourceBuilder;
 use opentelemetry::global;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
+use opentelemetry_sdk::trace::SdkTracerProvider;
 use std::net::SocketAddr;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 // use hyper::server::Server;
 // use hyper::service::make_service_fn;
 use tokio::net::TcpListener;
+use tokio::signal::unix::{SignalKind, signal};
+use tokio::sync::Notify;
 use tower::{ServiceBuilder, service_fn};
 // use tracing::instrument::WithSubscriber;
 // use tracing_opentelemetry::OpenTelemetryLayer;
@@ -163,7 +168,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //     .init(); // 初始化控制台输出
     //
     // 初始化Tracing和OpenTelemetry
-    init_tracing().await?;
+    let (otlp_tracer_provider, otlp_meter_provider) = init_tracing().await?;
 
     // 初始化 tracing + OTEL
     // let tracer = opentelemetry_jaeger::new_pipeline()
@@ -195,6 +200,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //
     // let t_service = ServiceBuilder::new().service(service_fn(echo));
 
+    // 用于通知关闭服务，释放资源
+    let shutdown = Arc::new(Notify::new());
+    let shutdown_clone = shutdown.clone();
+
+    // 跟踪活跃任务
+    // let active_tasks = Arc::new(tokio::sync::Mutex::new(0));
+    // 使用 AtomicUsize 替代 Mutex
+    let active_tasks = Arc::new(AtomicUsize::new(0));
+    let active_tasks_clone = active_tasks.clone();
+
+    // 处理信号
+    let mut sigint = signal(SignalKind::interrupt())?;
+    let mut sigterm = signal(SignalKind::terminate())?;
+
+    tokio::spawn(async move {
+        tokio::select! {
+            _ = sigint.recv() => tracing::info!("Received SIGINT, shutting down..."),
+            _ = sigterm.recv() => tracing::info!("Received SIGTERM, shutting down..."),
+        }
+        shutdown_clone.notify_one();
+    });
+
     let t_service = ServiceBuilder::new()
         .layer(middleware::tracing::TracingLayer)
         .layer(middleware::metrics::MetricsLayer)
@@ -209,27 +236,103 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let h_service = TowerToHyperService::new(t_service);
 
     loop {
-        let (stream, _) = listener.accept().await?;
-        let io = TokioIo::new(stream);
+        tokio::select! {
+            // TODO:这里是否只支持单线程处理请求？
+            result = listener.accept() => {
+                match result {
+                    Ok((stream, _addr)) => {
+                        let io = TokioIo::new(stream);
+                        let cloned_service = h_service.clone();
+                        let active_tasks = active_tasks.clone();
 
-        // TODO: optimize: clone service
-        let cloned_service = h_service.clone();
-        tokio::task::spawn(async move {
-            if let Err(err) = http1::Builder::new()
-                .serve_connection(io, cloned_service)
-                .await
-            {
-                tracing::error!("Error serving connection: {}", err);
+                        // 增加活跃任务计数
+                        // let mut locked_active_tasks = active_tasks.lock().await;
+                        // *locked_active_tasks += 1;
+                        // 增加活跃任务计数
+                        let active_tasks_clone_for_current_connection = active_tasks.clone();
+                        active_tasks_clone.fetch_add(1, Ordering::SeqCst);
+
+                        tokio::spawn(async move {
+                            if let Err(e) = http1::Builder::new()
+                            .serve_connection(io, cloned_service)
+                            .await {
+                                tracing::error!("Error serving connection: {}", e);
+                            }
+
+                            // 任务完成后减少活跃任务计数
+                            // let mut locked_active_tasks = active_tasks.lock().await;
+                            // *locked_active_tasks -= 1;
+                            // 任务完成，减少计数
+                            active_tasks_clone_for_current_connection.fetch_sub(1, Ordering::SeqCst);
+                        });
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to accept connection: {}", e);
+                        break;
+                    }
+                }
             }
-        });
+
+            // 收到退出信号，推出循环
+            _ = shutdown.notified() => {
+                tracing::info!("Shutting down: stopping new connections");
+                break;
+            }
+        }
+
+        // let (stream, _) = listener.accept().await?;
+        // let io = TokioIo::new(stream);
+        //
+        // // TODO: optimize: clone service
+        // let cloned_service = h_service.clone();
+        // tokio::task::spawn(async move {
+        //     if let Err(err) = http1::Builder::new()
+        //         .serve_connection(io, cloned_service)
+        //         .await
+        //     {
+        //         tracing::error!("Error serving connection: {}", err);
+        //     }
+        // });
     }
 
+    // 等待所有活跃任务完成
+    tracing::info!("Waiting for active tasks to complete");
+    // FIXME: 这里的active_tasks.lock().await == 0, sleep 会长时间占有锁，虽然不会阻塞
+    // 让出线程后锁还是被占有，其他active task执行完无法获取锁更新activeTaskCount
+    // NOTE: 已经修复，这里使用原子计数器即可
+    // loop {
+    //     if *active_tasks.lock().await == 0 {
+    //         break;
+    //     }
+    //     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    // }
+    while active_tasks.load(Ordering::SeqCst) > 0 {
+        tracing::info!(
+            "Waiting for {} active tasks to complete",
+            active_tasks.load(Ordering::SeqCst)
+        );
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    }
+
+    tracing::info!("All active tasks completed");
+
+    // 关闭 OpenTelemetry
+    tracing::info!("Shutting down OpenTelemetry");
+    otlp_tracer_provider.force_flush()?;
+    otlp_tracer_provider.shutdown()?;
+
+    otlp_meter_provider.force_flush()?;
+    otlp_meter_provider.shutdown()?;
+
+    tracing::info!("Server shutdown complete");
+    Ok(())
     // let make_svc = make_service_fn(|_conn| async { Ok::<_, hyper::Error>(create_service()) });
     // Server::bind(&addr).serve(make_svc).await.unwrap();
 }
 
 // 初始化 Tracing和OpenTelemetry
-async fn init_tracing() -> Result<(), Box<dyn std::error::Error>> {
+async fn init_tracing() -> Result<(SdkTracerProvider, SdkMeterProvider), Box<dyn std::error::Error>>
+{
     // 配置 tracer的 OTLP 导出器
     // Initialize OTLP exporter using gRPC (Tonic)
     let otlp_exporter = opentelemetry_otlp::SpanExporter::builder()
@@ -269,7 +372,7 @@ async fn init_tracing() -> Result<(), Box<dyn std::error::Error>> {
 
     // 设置全局 TracerProvider（追踪）
     // opentelemetry::global::set_meter_provider(tracer_provider);
-    opentelemetry::global::set_tracer_provider(tracer_provider);
+    opentelemetry::global::set_tracer_provider(tracer_provider.clone());
 
     // 配置Metrics
     // 配置 Metrics 的 OTLP 导出器
@@ -295,7 +398,7 @@ async fn init_tracing() -> Result<(), Box<dyn std::error::Error>> {
         )
         .build();
     // 设置全局 MeterProvider 用于程序内其他地方记录指标
-    global::set_meter_provider(meter_provider);
+    global::set_meter_provider(meter_provider.clone());
 
     // 创建 Tracing-OpenTelemetry层
     // let telemetry_tracer = opentelemetry::global::tracer("hyper-tower-service");
@@ -347,5 +450,5 @@ async fn init_tracing() -> Result<(), Box<dyn std::error::Error>> {
     //     "Initializing OTLP exporter and connecting to Jaeger endpoint at http://localhost:4317"
     // );
 
-    Ok(())
+    Ok((tracer_provider, meter_provider))
 }
