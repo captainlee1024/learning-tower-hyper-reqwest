@@ -2,8 +2,12 @@ use http::{Request, Response};
 // use http_body::Body;
 use http_body_util::{BodyExt, combinators::BoxBody};
 use hyper::body::Bytes;
+// use hyper_util::service::TowerToHyperService;
+// use tower::{ServiceBuilder, service_fn};
 // use tower::ServiceExt;
-use tracing::{Span, info, instrument};
+// use crate::middleware;
+use tracing::{event, info, instrument};
+
 // pub fn create_service() -> impl tower::Service<
 //     Request<hyper::body::Incoming>,
 //     Response = Response<BoxBody<Bytes, hyper::Error>>,
@@ -34,13 +38,13 @@ pub async fn echo(
     // let body = collected.to_bytes();
 
     // let frame = req.into_body().frame();
-    let span = Span::current();
+    // let span = Span::current();
 
     // let frame = req.into_body().map_frame(|frame| {
 
     // 配合 let _guard = span.enter(); 这里使用move
     let frame = req.into_body().map_frame(move |frame| {
-        let _guard = span.enter();
+        // let _guard = span.enter();
         let frame = if let Ok(data) = frame.into_data() {
             let uppercased = data
                 .iter()
@@ -58,6 +62,7 @@ pub async fn echo(
 
     // 用于测试timeout middleware
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    event!(target: "service::echo", tracing::Level::INFO, "handle echo success");
 
     Ok(Response::new(frame.boxed()))
 }

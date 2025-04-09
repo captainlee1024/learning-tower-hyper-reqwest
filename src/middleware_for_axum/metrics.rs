@@ -2,6 +2,7 @@ use http::{Request, Response};
 // use pin_project_lite::pin_project;
 use opentelemetry::KeyValue;
 use opentelemetry::metrics::{Counter, Histogram};
+use std::convert::Infallible;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -56,11 +57,11 @@ impl<S> MetricsMiddleware<S> {
 
 impl<S, ReqB, RespB> Service<Request<ReqB>> for MetricsMiddleware<S>
 where
-    S: Service<Request<ReqB>, Response = Response<RespB>, Error = hyper::Error> + Send + 'static,
+    S: Service<Request<ReqB>, Response = Response<RespB>, Error = Infallible> + Send + 'static,
     S::Future: Send + 'static,
 {
     type Response = S::Response;
-    type Error = S::Error;
+    type Error = Infallible; // 与 Axum 的 Route 一致
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -77,15 +78,17 @@ where
         let request_duration = self.request_duration.clone();
 
         Box::pin(async move {
-            let res = fut.await;
+            let res = fut.await?; // S::Error 是 Infallible，不会失败
             let elapsed = start.elapsed();
             request_duration.record(
                 elapsed.as_millis_f64(),
                 &[KeyValue::new("method", method.clone())],
             );
             // event!(Level::INFO, %method, elapsed_ms = elapsed.as_millis(), "Request metrics recorded");
-            event!(target: "middleware::metrics", Level::INFO, %method, elapsed_us = elapsed.as_micros(), "Request metrics recorded");
-            res
+            // NOTE:
+            // 这里一定要fut处理完之后，拿到resp再记录日志
+            event!(target: "middleware_for_axum::metrics", Level::INFO, %method, elapsed_us = elapsed.as_micros(), "Request metrics recorded");
+            Ok(res)
         })
     }
 }

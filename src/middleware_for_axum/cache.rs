@@ -1,6 +1,7 @@
 use http::{Request, Response};
 use http_body::Body;
 // use pin_project_lite::pin_project;
+use std::convert::Infallible;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -34,27 +35,27 @@ pub struct CacheMiddleware<S> {
 impl<S, ReqB, RespB> Service<Request<ReqB>> for CacheMiddleware<S>
 where
     ReqB: Body + Send + 'static,
-    S: Service<Request<ReqB>, Response = Response<RespB>, Error = hyper::Error> + Send + 'static,
+    S: Service<Request<ReqB>, Response = Response<RespB>, Error = Infallible> + Send + 'static,
     S::Future: Send + 'static,
 {
     type Response = S::Response;
-    type Error = S::Error;
+    type Error = Infallible; // 与 Axum 的 Route 一致
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
+        self.inner.poll_ready(cx) // S::Error 是 Infallible，无需转换
     }
 
     #[instrument(skip(self, req), fields(layer = "cache"))]
     fn call(&mut self, req: Request<ReqB>) -> Self::Future {
-        // let span = Span::current();
+        let _span = tracing::Span::current();
         let fut = self.inner.call(req);
 
         Box::pin(async move {
-            // 1. 缓存逻辑
-            // 2. 记录日志
-            event!(target: "middleware::cache", Level::INFO, "Cache checked (no real cache in demo)");
-            // 3. 后续处理
+            // 在这里可以添加缓存逻辑
+            // 然后记录日志
+            event!(target: "middleware_for_axum::cache", Level::INFO, "Cache checked (no real cache in demo)");
+            // 然后再接着处理
             fut.await
         })
     }

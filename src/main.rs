@@ -1,7 +1,9 @@
 #![feature(duration_millis_float)]
 
 mod app;
+mod appv2;
 mod middleware;
+mod middleware_for_axum;
 
 use crate::app::echo;
 // use futures::SinkExt;
@@ -12,6 +14,8 @@ use opentelemetry::trace::TracerProvider;
 use opentelemetry_otlp::{Protocol, WithExportConfig};
 use opentelemetry_sdk::Resource;
 // use opentelemetry_sdk::resource::ResourceBuilder;
+use axum::Router;
+use axum::routing::{get, post};
 use opentelemetry::global;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::trace::SdkTracerProvider;
@@ -27,9 +31,9 @@ use tower::{ServiceBuilder, service_fn};
 // use tracing::instrument::WithSubscriber;
 // use tracing_opentelemetry::OpenTelemetryLayer;
 // use tracing_subscriber::fmt::writer::MakeWriterExt;
+use crate::appv2::{AppState, echo_handler, health_handler};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{Layer, Registry};
-
 // use tracing_opentelemetry::OpenTelemetryLayer;
 // use tracing_subscriber::Registry;
 // use tracing_subscriber::layer::SubscriberExt;
@@ -267,7 +271,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .service(service_fn(echo));
 
     // TowerToHyperService<ServiceFn<fn(Request<Incoming>) ->impl Future<Output = Result<Response<BoxBody<Bytes, Error>>, Error>> + Sized>>>
-    let h_service = TowerToHyperService::new(t_service);
+    let hyper_service = TowerToHyperService::new(t_service);
+
+    // 初始化状态
+    let state = Arc::new(AppState {
+        message: "Server is running".to_string(),
+    });
+
+    // 构建 Router
+    let app: Router = Router::new()
+        .route("/health", get(health_handler))
+        .route("/echo", post(echo_handler))
+        .with_state(state) // 注入状态
+        .layer(
+            ServiceBuilder::new()
+                .layer(middleware_for_axum::tracing::TracingLayer)
+                .layer(middleware_for_axum::metrics::MetricsLayer)
+                .layer(middleware_for_axum::auth::AuthLayer)
+                // FIXME: 这里的body limit 中间件会导致Service<Request<Limited<ReqBody>> Request类型不一致
+                // .layer(middleware::ratelimit::ratelimit_layer())
+                .layer(middleware_for_axum::cache::CacheLayer)
+                .layer(middleware_for_axum::timeout::timeout_layer()),
+        ); // 添加 Tower 中间件
+
+    let axum_service = TowerToHyperService::new(app.into_service());
 
     loop {
         tokio::select! {
@@ -276,7 +303,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 match result {
                     Ok((stream, _addr)) => {
                         let io = TokioIo::new(stream);
-                        let cloned_service = h_service.clone();
+                        let _cloned_hyper_service = hyper_service.clone();
+                        let cloned_axum_service = axum_service.clone();
                         let active_tasks = active_tasks.clone();
 
                         // 增加活跃任务计数
@@ -288,7 +316,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                         tokio::spawn(async move {
                             if let Err(e) = http1::Builder::new()
-                            .serve_connection(io, cloned_service)
+                            .serve_connection(io, cloned_axum_service)
                             .await {
                                 tracing::error!(target: "server::connection", "Error serving connection: {}", e);
                             }
