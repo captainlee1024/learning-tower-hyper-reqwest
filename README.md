@@ -83,6 +83,24 @@ cargo run
 curl -v -X POST -H "Authorization: Bearer token" -d "hello world" http://127.0.0.1:3000
 ```
 
+test the axum router feature:
+
+```bash
+url -X GET \
+     -H "Authorization: Bearer token" \
+     -H "Content-Type: application/json" \
+     -d '{"text":"hello world!"}' \
+     http://127.0.0.1:3000/health
+```
+
+```bash
+url -X POST \
+     -H "Authorization: Bearer token" \
+     -H "Content-Type: application/json" \
+     -d '{"text":"hello world!"}' \
+     http://127.0.0.1:3000/echo
+```
+
 5、check the trace in Jaeger UI:
 
 [open Jaeger UI in browser](http://localhost:16686/)
