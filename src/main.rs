@@ -159,6 +159,40 @@ use tracing_subscriber::{Layer, Registry};
 ///         - Type: Histogram
 ///         - Config: X-axis: `le` (bucket boundaries), Y-axis: count, unit: milliseconds
 ///     - **Value**: Understand duration spread, e.g., most requests in low latency.
+///
+/// 8、test the graceful shutdown using ab:
+///
+/// install and check the ab:
+///
+/// ```bash
+/// ab -V
+/// This is ApacheBench, Version 2.3 <$Revision: 1923142 $>
+/// Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
+/// Licensed to The Apache Software Foundation, http://www.apache.org/
+/// ```
+///
+/// using ab to send 100 requests by 100 connections, ctrl+c to stop the server immediately:
+///
+/// ```bash
+/// ab -n 100 -c 100 -H "Authorization: Bearer token" -p ab_post_data_for_test.txt -T "application/json" http://127.0.0.1:3000/
+/// ```
+///
+/// check the trace in terminal:
+///
+/// ```text
+/// ...
+/// 2025-04-09T11:02:41.505884Z  INFO server::shutdown: Received SIGINT, shutting down...
+/// 2025-04-09T11:02:41.505920Z  INFO server::shutdown: Shutting down: stopping new connections
+/// 2025-04-09T11:02:41.505932Z  INFO server::shutdown: Waiting for active tasks to complete
+/// 2025-04-09T11:02:41.505938Z  INFO server::shutdown: Waiting for 100 active tasks to complete
+/// ...
+/// 2025-04-09T11:02:41.827603Z  INFO server::shutdown: Waiting for 75 active tasks to complete
+/// ...
+/// 2025-04-09T11:02:42.214166Z  INFO server::shutdown: All active tasks completed
+/// 2025-04-09T11:02:42.214235Z  INFO server::shutdown: Shutting down OpenTelemetry
+/// 2025-04-09T11:02:42.267836Z  INFO server::shutdown: Server shutdown complete
+///
+/// ```
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // // 初始化 Tracing
@@ -216,8 +250,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tokio::spawn(async move {
         tokio::select! {
-            _ = sigint.recv() => tracing::info!("Received SIGINT, shutting down..."),
-            _ = sigterm.recv() => tracing::info!("Received SIGTERM, shutting down..."),
+            _ = sigint.recv() => tracing::info!(target: "server::shutdown", "Received SIGINT, shutting down..."),
+            _ = sigterm.recv() => tracing::info!(target: "server::shutdown", "Received SIGTERM, shutting down..."),
         }
         shutdown_clone.notify_one();
     });
@@ -256,7 +290,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             if let Err(e) = http1::Builder::new()
                             .serve_connection(io, cloned_service)
                             .await {
-                                tracing::error!("Error serving connection: {}", e);
+                                tracing::error!(target: "server::connection", "Error serving connection: {}", e);
                             }
 
                             // 任务完成后减少活跃任务计数
@@ -267,7 +301,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         });
                     }
                     Err(e) => {
-                        tracing::error!("Failed to accept connection: {}", e);
+                        tracing::error!(target: "server::accept", "Failed to accept connection: {}", e);
                         break;
                     }
                 }
@@ -275,7 +309,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // 收到退出信号，推出循环
             _ = shutdown.notified() => {
-                tracing::info!("Shutting down: stopping new connections");
+                tracing::info!(target: "server::shutdown", "Shutting down: stopping new connections");
                 break;
             }
         }
@@ -296,7 +330,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // 等待所有活跃任务完成
-    tracing::info!("Waiting for active tasks to complete");
+    tracing::info!(target: "server::shutdown", "Waiting for active tasks to complete");
     // FIXME: 这里的active_tasks.lock().await == 0, sleep 会长时间占有锁，虽然不会阻塞
     // 让出线程后锁还是被占有，其他active task执行完无法获取锁更新activeTaskCount
     // NOTE: 已经修复，这里使用原子计数器即可
@@ -315,24 +349,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //     shutdown_complete_clone.notify_one();
     // }
     while active_tasks.load(Ordering::SeqCst) > 0 {
-        tracing::info!(
+        tracing::info!(target: "server::shutdown",
             "Waiting for {} active tasks to complete",
             active_tasks.load(Ordering::SeqCst)
         );
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     }
 
-    tracing::info!("All active tasks completed");
+    tracing::info!(target: "server::shutdown", "All active tasks completed");
 
     // 关闭 OpenTelemetry
-    tracing::info!("Shutting down OpenTelemetry");
+    tracing::info!(target: "server::shutdown", "Shutting down OpenTelemetry");
     otlp_tracer_provider.force_flush()?;
     otlp_tracer_provider.shutdown()?;
 
     otlp_meter_provider.force_flush()?;
     otlp_meter_provider.shutdown()?;
 
-    tracing::info!("Server shutdown complete");
+    tracing::info!(target: "server::shutdown", "Server shutdown complete");
     Ok(())
     // let make_svc = make_service_fn(|_conn| async { Ok::<_, hyper::Error>(create_service()) });
     // Server::bind(&addr).serve(make_svc).await.unwrap();

@@ -123,3 +123,37 @@ Grafana Chart Examples
         - Type: Histogram
         - Config: X-axis: `le` (bucket boundaries), Y-axis: count, unit: milliseconds
     - **Value**: Understand duration spread, e.g., most requests in low latency.
+
+8、test the graceful shutdown using ab:
+
+install and check the ab:
+
+```bash
+ab -V
+This is ApacheBench, Version 2.3 <$Revision: 1923142 $>
+Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
+Licensed to The Apache Software Foundation, http://www.apache.org/
+```
+
+using ab to send 100 requests by 100 connections, ctrl+c to stop the server immediately:
+
+```bash
+ab -n 100 -c 100 -H "Authorization: Bearer token" -p ab_post_data_for_test.txt -T "application/json" http://127.0.0.1:3000/
+```
+
+check the trace in terminal:
+
+```text
+...
+2025-04-09T11:02:41.505884Z  INFO server::shutdown: Received SIGINT, shutting down...
+2025-04-09T11:02:41.505920Z  INFO server::shutdown: Shutting down: stopping new connections
+2025-04-09T11:02:41.505932Z  INFO server::shutdown: Waiting for active tasks to complete
+2025-04-09T11:02:41.505938Z  INFO server::shutdown: Waiting for 100 active tasks to complete
+...
+2025-04-09T11:02:41.827603Z  INFO server::shutdown: Waiting for 75 active tasks to complete
+...
+2025-04-09T11:02:42.214166Z  INFO server::shutdown: All active tasks completed
+2025-04-09T11:02:42.214235Z  INFO server::shutdown: Shutting down OpenTelemetry
+2025-04-09T11:02:42.267836Z  INFO server::shutdown: Server shutdown complete
+
+```
