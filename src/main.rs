@@ -306,6 +306,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //     }
     //     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     // }
+    // TODO: 是否需要使用watch的方式优化这里的轮训
+    // watch主动通知，类似
+    // let (shutdown_tx, shutdown_rx) = watch::channel(false);
+    // // 任务线程
+    // let remaining = active_tasks_clone.fetch_sub(1, Ordering::SeqCst);
+    // if remaining == 1 && *shutdown_rx_task.borrow() {
+    //     shutdown_complete_clone.notify_one();
+    // }
     while active_tasks.load(Ordering::SeqCst) > 0 {
         tracing::info!(
             "Waiting for {} active tasks to complete",
