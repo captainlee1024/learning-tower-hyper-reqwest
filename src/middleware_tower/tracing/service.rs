@@ -92,10 +92,15 @@ where
         // return TracingResponseFuture::payload_example();
         // 这里通过middleware logic之后，返回上有的service的call 的response
 
+        // FIXME: 修复一次request 的tracing 被分成两段上报了
+        // 因为self.inner.call(req).instrument(tracing::trace_span!("request"))导致fut类型变化
+        // 无法传递至TracingResponseFuture::new()，因此一个request会上传两次
+        // 第一次是这里 + auth 中间件 call方法里的tracing
         tracing::info!(target: "middleware::tracing", "handling request");
 
         let fut = self.inner.call(req);
 
+        // 第二次是这里往后所有的tracing
         TracingResponseFuture::new(fut, method, uri)
     }
 }
