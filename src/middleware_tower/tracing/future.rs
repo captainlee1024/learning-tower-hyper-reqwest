@@ -98,6 +98,9 @@ where
             ResFutProj::Future { future } => {
                 // 需要把上游的Response转换成我们的Response
                 let res = ready!(future.poll(cx))?.map(TracingResponseBody::new);
+                // 这里每次poll时都会进入future.poll(cx)
+                // 只有上游service全都执行并返回后才会执行到这里，所以该tracing只会执行一次
+                // 不会每次poll都执行
                 tracing::info!(target: "middleware::tracing", "handle successfully");
                 res
             }

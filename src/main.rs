@@ -249,6 +249,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(all(feature = "service-my", feature = "middleware-tower"))]
     let t_service = ServiceBuilder::new()
         .layer(middleware_tower::tracing::TracingLayer)
+        .layer(middleware_tower::metrics::MetricsLayer)
+        .layer(middleware_tower::auth::AuthLayer)
         .service(service_fn(echo));
     // TowerToHyperService<ServiceFn<fn(Request<Incoming>) ->impl Future<Output = Result<Response<BoxBody<Bytes, Error>>, Error>> + Sized>>>
 
@@ -284,7 +286,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/health", get(health_handler))
         .route("/echo", post(echo_handler))
         .with_state(state) // 注入状态
-        .layer(ServiceBuilder::new().layer(middleware_tower::tracing::TracingLayer)); // 添加 Tower 中间件
+        .layer(
+            ServiceBuilder::new()
+                .layer(middleware_tower::tracing::TracingLayer)
+                .layer(middleware_tower::metrics::MetricsLayer)
+                .layer(middleware_tower::auth::AuthLayer),
+        ); // 添加 Tower 中间件
 
     #[cfg(feature = "service-axum")]
     let axum_service = TowerToHyperService::new(app.into_service());
