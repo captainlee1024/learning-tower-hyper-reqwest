@@ -4,6 +4,7 @@ mod app;
 mod appv2;
 mod middleware_for_axum;
 mod middleware_for_my_service;
+mod middleware_tower;
 
 use crate::app::echo;
 // use futures::SinkExt;
@@ -260,14 +261,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         shutdown_clone.notify_one();
     });
 
+    // let t_service = ServiceBuilder::new()
+    //     .layer(middleware_for_my_service::tracing::TracingLayer)
+    //     .layer(middleware_for_my_service::metrics::MetricsLayer)
+    //     .layer(middleware_for_my_service::auth::AuthLayer)
+    //     // FIXME: 这里的body limit 中间件会导致Service<Request<Limited<ReqBody>> Request类型不一致
+    //     // .layer(middleware_for_my_service::ratelimit::ratelimit_layer())
+    //     .layer(middleware_for_my_service::cache::CacheLayer)
+    //     .layer(middleware_for_my_service::timeout::timeout_layer())
+    //     .service(service_fn(echo));
+
+    // 构建 Tower Service 使用通用的标准 Tower Service middleware
     let t_service = ServiceBuilder::new()
-        .layer(middleware_for_my_service::tracing::TracingLayer)
-        .layer(middleware_for_my_service::metrics::MetricsLayer)
-        .layer(middleware_for_my_service::auth::AuthLayer)
-        // FIXME: 这里的body limit 中间件会导致Service<Request<Limited<ReqBody>> Request类型不一致
-        // .layer(middleware_for_my_service::ratelimit::ratelimit_layer())
-        .layer(middleware_for_my_service::cache::CacheLayer)
-        .layer(middleware_for_my_service::timeout::timeout_layer())
+        .layer(middleware_tower::tracing::TracingLayer)
         .service(service_fn(echo));
 
     // TowerToHyperService<ServiceFn<fn(Request<Incoming>) ->impl Future<Output = Result<Response<BoxBody<Bytes, Error>>, Error>> + Sized>>>
@@ -279,21 +285,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // 构建 Router
+    // let app: Router = Router::new()
+    //     .route("/health", get(health_handler))
+    //     .route("/echo", post(echo_handler))
+    //     .with_state(state) // 注入状态
+    //     .layer(
+    //         ServiceBuilder::new()
+    //             .layer(middleware_for_axum::tracing::TracingLayer)
+    //             .layer(middleware_for_axum::metrics::MetricsLayer)
+    //             .layer(middleware_for_axum::auth::AuthLayer)
+    //             // FIXME: 这里的body limit 中间件会导致Service<Request<Limited<ReqBody>> Request类型不一致
+    //             // .layer(middleware_for_my_service::ratelimit::ratelimit_layer())
+    //             .layer(middleware_for_axum::cache::CacheLayer)
+    //             .layer(middleware_for_axum::timeout::timeout_layer()),
+    //     ); // 添加 Tower 中间件
+
+    // 构建Router 使用通用的标准 Tower Service middleware
     let app: Router = Router::new()
         .route("/health", get(health_handler))
         .route("/echo", post(echo_handler))
         .with_state(state) // 注入状态
-        .layer(
-            ServiceBuilder::new()
-                .layer(middleware_for_axum::tracing::TracingLayer)
-                .layer(middleware_for_axum::metrics::MetricsLayer)
-                .layer(middleware_for_axum::auth::AuthLayer)
-                // FIXME: 这里的body limit 中间件会导致Service<Request<Limited<ReqBody>> Request类型不一致
-                // .layer(middleware_for_my_service::ratelimit::ratelimit_layer())
-                .layer(middleware_for_axum::cache::CacheLayer)
-                .layer(middleware_for_axum::timeout::timeout_layer()),
-        ); // 添加 Tower 中间件
-
+        .layer(ServiceBuilder::new().layer(middleware_tower::tracing::TracingLayer)); // 添加 Tower 中间件
     let axum_service = TowerToHyperService::new(app.into_service());
 
     loop {
