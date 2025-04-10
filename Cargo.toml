@@ -37,3 +37,17 @@ axum = "0.8.3"
 bytes = "1"
 
 [features]
+default = []
+# service组，只能开启一个
+# 启用axum service
+service-axum = []
+# 启用hyper+tower原生service
+service-my = []
+
+# middleware组，只能开启一个
+# 启用axum可用的middleware
+middleware-axum = []
+# 启用自己编写的hyper tower service可用middleware
+middleware-my = []
+# 启用通用的标准tower middleware
+middleware-tower = []
