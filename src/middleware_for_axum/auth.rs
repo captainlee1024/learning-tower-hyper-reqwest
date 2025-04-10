@@ -59,7 +59,7 @@ where
     // FIXME:为什么instrument里的target不生效
     // #[instrument(skip(self, req), fields(layer = "auth", authorized = field::Empty))]
     // 修复span.record(), 要提前声明字段才能赋值
-    #[instrument(skip(self, req), fields(layer = "auth", authorized = field::Empty), target = "middleware::auth")]
+    #[instrument(skip(self, req), fields(layer = "auth", authorized = field::Empty), target = "middleware_for_my_service::auth")]
     fn call(&mut self, req: Request<ReqB>) -> Self::Future {
         let span = Span::current();
         let authorized = req.headers().get("Authorization").is_some();

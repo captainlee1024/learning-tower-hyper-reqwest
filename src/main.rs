@@ -2,8 +2,8 @@
 
 mod app;
 mod appv2;
-mod middleware;
 mod middleware_for_axum;
+mod middleware_for_my_service;
 
 use crate::app::echo;
 // use futures::SinkExt;
@@ -261,13 +261,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let t_service = ServiceBuilder::new()
-        .layer(middleware::tracing::TracingLayer)
-        .layer(middleware::metrics::MetricsLayer)
-        .layer(middleware::auth::AuthLayer)
+        .layer(middleware_for_my_service::tracing::TracingLayer)
+        .layer(middleware_for_my_service::metrics::MetricsLayer)
+        .layer(middleware_for_my_service::auth::AuthLayer)
         // FIXME: 这里的body limit 中间件会导致Service<Request<Limited<ReqBody>> Request类型不一致
-        // .layer(middleware::ratelimit::ratelimit_layer())
-        .layer(middleware::cache::CacheLayer)
-        .layer(middleware::timeout::timeout_layer())
+        // .layer(middleware_for_my_service::ratelimit::ratelimit_layer())
+        .layer(middleware_for_my_service::cache::CacheLayer)
+        .layer(middleware_for_my_service::timeout::timeout_layer())
         .service(service_fn(echo));
 
     // TowerToHyperService<ServiceFn<fn(Request<Incoming>) ->impl Future<Output = Result<Response<BoxBody<Bytes, Error>>, Error>> + Sized>>>
@@ -289,7 +289,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .layer(middleware_for_axum::metrics::MetricsLayer)
                 .layer(middleware_for_axum::auth::AuthLayer)
                 // FIXME: 这里的body limit 中间件会导致Service<Request<Limited<ReqBody>> Request类型不一致
-                // .layer(middleware::ratelimit::ratelimit_layer())
+                // .layer(middleware_for_my_service::ratelimit::ratelimit_layer())
                 .layer(middleware_for_axum::cache::CacheLayer)
                 .layer(middleware_for_axum::timeout::timeout_layer()),
         ); // 添加 Tower 中间件

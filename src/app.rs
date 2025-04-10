@@ -5,7 +5,7 @@ use hyper::body::Bytes;
 // use hyper_util::service::TowerToHyperService;
 // use tower::{ServiceBuilder, service_fn};
 // use tower::ServiceExt;
-// use crate::middleware;
+// use crate::middleware_for_my_service;
 use tracing::{event, info, instrument};
 
 // pub fn create_service() -> impl tower::Service<
@@ -60,7 +60,7 @@ pub async fn echo(
         hyper::body::Frame::data(frame)
     });
 
-    // 用于测试timeout middleware
+    // 用于测试timeout middleware_for_my_service
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     event!(target: "service::echo", tracing::Level::INFO, "handle echo success");
 

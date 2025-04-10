@@ -56,7 +56,7 @@ where
     // FIXME:为什么instrument里的target不生效
     // #[instrument(skip(self, req), fields(layer = "auth", authorized = field::Empty))]
     // 修复span.record(), 要提前声明字段才能赋值
-    #[instrument(skip(self, req), fields(layer = "auth", authorized = field::Empty), target = "middleware::auth")]
+    #[instrument(skip(self, req), fields(layer = "auth", authorized = field::Empty), target = "middleware_for_my_service::auth")]
     fn call(&mut self, req: Request<ReqB>) -> Self::Future {
         let span = Span::current();
         let authorized = req.headers().get("Authorization").is_some();
@@ -80,7 +80,7 @@ where
                 //
                 // 在 span 中运行这段逻辑，确保输出 span 字段
                 span.in_scope(|| {
-                    event!(target: "middleware::auth", Level::WARN, authorized, "Unauthorized request");
+                    event!(target: "middleware_for_my_service::auth", Level::WARN, authorized, "Unauthorized request");
                 });
                 Ok(res)
             });
@@ -92,7 +92,7 @@ where
             // event!(Level::INFO, authorized, "Authorized request");
             // 同样包裹在 span 中，记录 INFO 日志, 确保输出 span 字段
             span.in_scope(|| {
-                event!(target: "middleware::auth", Level::INFO, authorized, "Authorized request");
+                event!(target: "middleware_for_my_service::auth", Level::INFO, authorized, "Authorized request");
             });
 
             fut.await

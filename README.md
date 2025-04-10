@@ -86,7 +86,7 @@ curl -v -X POST -H "Authorization: Bearer token" -d "hello world" http://127.0.0
 test the axum router feature:
 
 ```bash
-url -X GET \
+curl -X GET \
      -H "Authorization: Bearer token" \
      -H "Content-Type: application/json" \
      -d '{"text":"hello world!"}' \
@@ -94,7 +94,7 @@ url -X GET \
 ```
 
 ```bash
-url -X POST \
+curl -X POST \
      -H "Authorization: Bearer token" \
      -H "Content-Type: application/json" \
      -d '{"text":"hello world!"}' \

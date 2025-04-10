@@ -53,7 +53,7 @@ where
         Box::pin(async move {
             // 1. 缓存逻辑
             // 2. 记录日志
-            event!(target: "middleware::cache", Level::INFO, "Cache checked (no real cache in demo)");
+            event!(target: "middleware_for_my_service::cache", Level::INFO, "Cache checked (no real cache in demo)");
             // 3. 后续处理
             fut.await
         })

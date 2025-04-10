@@ -57,9 +57,9 @@ where
             async move {
                 let res = fut.await;
                 if res.is_err() {
-                    tracing::warn!(target: "middleware::tracing", "Request failed");
+                    tracing::warn!(target: "middleware_for_my_service::tracing", "Request failed");
                 } else {
-                    tracing::info!(target: "middleware::tracing", "Request succeeded");
+                    tracing::info!(target: "middleware_for_my_service::tracing", "Request succeeded");
                 }
                 // tracing::info!("Request handled");
                 res
