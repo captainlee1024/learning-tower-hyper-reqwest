@@ -22,6 +22,8 @@ use std::time::Duration;
 // use hyper::server::Server;
 // use hyper::service::make_service_fn;
 #[cfg(feature = "service-axum")]
+use crate::appv2::ApiDoc;
+#[cfg(feature = "service-axum")]
 use crate::appv2::{AppState, echo_handler, health_handler};
 use crate::init_opentelemetry::init_tracing;
 #[cfg(feature = "service-axum")]
@@ -35,6 +37,10 @@ use tokio::sync::Notify;
 use tower::ServiceBuilder;
 #[cfg(feature = "service-my")]
 use tower::service_fn;
+#[cfg(feature = "service-axum")]
+use utoipa::OpenApi;
+#[cfg(feature = "service-axum")]
+use utoipa_swagger_ui::SwaggerUi;
 
 /// # hyper-tower-echo-demo
 ///
@@ -121,7 +127,7 @@ use tower::service_fn;
 /// 4、test with curl:
 ///
 /// ```bash
-/// curl -v -X POST -H "Authorization: Bearer token" -d "hello world" http://127.0.0.1:3000
+/// curl -v -X POST -H "Auth-Key: Bearer token" -d "hello world" http://127.0.0.1:3000
 /// ```
 ///
 /// 5、check the trace in Jaeger UI:
@@ -271,7 +277,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 构建 Router
     #[cfg(all(feature = "service-axum", feature = "middleware-axum"))]
-    let app: Router = Router::new()
+    let api_router: Router = Router::new()
         .route("/health", get(health_handler))
         .route("/echo", post(echo_handler))
         .with_state(state) // 注入状态
@@ -288,9 +294,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 构建Router 使用通用的标准 Tower Service middleware
     #[cfg(all(feature = "service-axum", feature = "middleware-tower"))]
-    let app: Router = Router::new()
+    let api_router: Router = Router::new()
         .route("/health", get(health_handler))
         .route("/echo", post(echo_handler))
+        // .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .with_state(state) // 注入状态
         .layer(
             ServiceBuilder::new()
@@ -302,6 +309,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .layer(middleware_tower::cache::CacheLayer)
                 .layer(middleware_tower::auth::AuthLayer),
         ); // 添加 Tower 中间件
+
+    #[cfg(all(feature = "service-axum"))]
+    // 创建 Swagger UI 的 Router，不加中间件
+    let swagger_router: Router = Router::new()
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()));
+
+    #[cfg(all(feature = "service-axum"))]
+    // 3. 合并两个 Router
+    let app: Router = Router::new()
+        .merge(swagger_router) // Swagger UI 路由，不走中间件
+        .merge(api_router); // 业务路由，走中间件
 
     #[cfg(feature = "service-axum")]
     let axum_service = TowerToHyperService::new(app.into_service());

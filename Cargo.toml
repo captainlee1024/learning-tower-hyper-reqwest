@@ -36,6 +36,12 @@ serde = { version = "1.0.219", features = ["derive"] }
 axum = "0.8.3"
 bytes = "1"
 
+utoipa = { version = "5.3.1", features = ["axum_extras"] } # 用于生成OpenAPI规范
+utoipa-swagger-ui = { version = "9.0.0", features = ["axum"] } # 用于提供Swagger UI
+
+[dependencies.zip]
+version = "=2.4.0" # 使用兼容版本，注意使用精确匹配
+
 [features]
 default = []
 # service组，只能开启一个

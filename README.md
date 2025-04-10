@@ -83,14 +83,14 @@ cargo run --features "service-my middleware-tower"
 4、test with curl:
 
 ```bash
-curl -v -X POST -H "Authorization: Bearer token" -d "hello world" http://127.0.0.1:3000
+curl -v -X POST -H "Auth-Key: Bearer token" -d "hello world" http://127.0.0.1:3000
 ```
 
 test the axum router feature:
 
 ```bash
 curl -v -X GET \
-     -H "Authorization: Bearer token" \
+     -H "Auth-Key: Bearer token" \
      -H "Content-Type: application/json" \
      -d '{"text":"hello world!"}' \
      http://127.0.0.1:3000/health
@@ -98,7 +98,7 @@ curl -v -X GET \
 
 ```bash
 curl -v -X POST \
-     -H "Authorization: Bearer token" \
+     -H "Auth-Key: Bearer token" \
      -H "Content-Type: application/json" \
      -d '{"text":"hello world!"}' \
      http://127.0.0.1:3000/echo

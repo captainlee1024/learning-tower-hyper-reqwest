@@ -61,7 +61,9 @@ where
     #[instrument(skip_all, name="auth", fields(authorized = field::Empty), target = "middleware::auth")]
     fn call(&mut self, req: Request<ReqBody>) -> Self::Future {
         let span = Span::current();
-        let authorized = req.headers().get("Authorization").is_some();
+        // let authorized = req.headers().get("Authorization").is_some();
+        // 适配swagger, 暂时使用自定义的Auth-Key 通过auth认证，Authorization是security内置key不让用
+        let authorized = req.headers().get("Auth-Key").is_some();
         span.record("authorized", &authorized);
 
         if !authorized {
