@@ -399,6 +399,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // if remaining == 1 && *shutdown_rx_task.borrow() {
     //     shutdown_complete_clone.notify_one();
     // }
+    // FIXME: 添加Swagger之后 会有浏览器建立的连接不退出，导致程序不退出
     while active_tasks.load(Ordering::SeqCst) > 0 {
         tracing::info!(target: "server::shutdown",
             "Waiting for {} active tasks to complete",
