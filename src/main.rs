@@ -17,6 +17,8 @@ use hyper_util::service::TowerToHyperService;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+#[cfg(feature = "middleware-tower")]
+use std::time::Duration;
 // use hyper::server::Server;
 // use hyper::service::make_service_fn;
 #[cfg(feature = "service-axum")]
@@ -250,6 +252,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let t_service = ServiceBuilder::new()
         .layer(middleware_tower::tracing::TracingLayer)
         .layer(middleware_tower::metrics::MetricsLayer)
+        .layer(middleware_tower::timeout::TimeoutLayer::new(
+            Duration::from_millis(501),
+        ))
+        .layer(middleware_tower::cache::CacheLayer)
         .layer(middleware_tower::auth::AuthLayer)
         .service(service_fn(echo));
     // TowerToHyperService<ServiceFn<fn(Request<Incoming>) ->impl Future<Output = Result<Response<BoxBody<Bytes, Error>>, Error>> + Sized>>>
@@ -290,6 +296,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ServiceBuilder::new()
                 .layer(middleware_tower::tracing::TracingLayer)
                 .layer(middleware_tower::metrics::MetricsLayer)
+                .layer(middleware_tower::timeout::TimeoutLayer::new(
+                    Duration::from_millis(1000),
+                ))
+                .layer(middleware_tower::cache::CacheLayer)
                 .layer(middleware_tower::auth::AuthLayer),
         ); // 添加 Tower 中间件
 
