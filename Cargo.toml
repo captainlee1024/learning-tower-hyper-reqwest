@@ -13,10 +13,14 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tracing-opentelemetry = "0.30"
 
 #opentelemetry = { version = "0.2", features = ["full"] }
-opentelemetry = { version = "0.29", futures = ["full"] }
+opentelemetry = { version = "0.29" }
 
-opentelemetry_sdk = { version = "0.29.0", futures = ["full"] }
-opentelemetry-otlp = { version = "0.29.0", features = ["tonic", "grpc-tonic", "metrics"] }
+opentelemetry_sdk = { version = "0.29.0" }
+opentelemetry-otlp = { version = "0.29.0", features = [
+    "tonic",
+    "grpc-tonic",
+    "metrics",
+] }
 opentelemetry-stdout = { version = "0.29.0" }
 
 # 已经不需要了，使用OTLP(opentelemetry-otlp)协议与Prometheus进行通信,
@@ -36,11 +40,8 @@ serde = { version = "1.0.219", features = ["derive"] }
 axum = "0.8.3"
 bytes = "1"
 
-utoipa = { version = "5.3.1", features = ["axum_extras"] } # 用于生成OpenAPI规范
-utoipa-swagger-ui = { version = "9.0.0", features = ["axum"] } # 用于提供Swagger UI
-
-[dependencies.zip]
-version = "=2.4.0" # 使用兼容版本，注意使用精确匹配
+utoipa = { version = "5.3.1", features = ["axum_extras"] }     # 用于生成OpenAPI规范
+utoipa-swagger-ui = { version = "9.0.1", features = ["axum"] } # 用于提供Swagger UI
 
 [features]
 default = []
