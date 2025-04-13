@@ -44,7 +44,7 @@ utoipa = { version = "5.3.1", features = ["axum_extras"] }     # 用于生成Ope
 utoipa-swagger-ui = { version = "9.0.1", features = ["axum"] } # 用于提供Swagger UI
 
 [features]
-default = []
+default = ["service-axum", "middleware-tower"]
 # service组，只能开启一个
 # 启用axum service
 service-axum = []

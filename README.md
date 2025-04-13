@@ -74,10 +74,10 @@ docker run -d \
 3、launch the echo server:
 
 ```bash
-cargo run --features "service-axum middleware-tower"
-cargo run --features "service-axum middleware-axum"
-cargo run --features "service-my middleware-my"
-cargo run --features "service-my middleware-tower"
+cargo run --no-default-features --features "service-axum middleware-tower"
+cargo run --no-default-features --features "service-axum middleware-axum"
+cargo run --no-default-features --features "service-my middleware-my"
+cargo run --no-default-features --features "service-my middleware-tower"
 ```
 
 4、test with curl:
