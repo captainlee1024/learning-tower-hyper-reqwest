@@ -7,7 +7,7 @@ use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::{info, instrument};
-use utoipa::{OpenApi, ToSchema};
+use utoipa::ToSchema;
 
 // 状态结构体
 #[derive(Clone)]
@@ -70,15 +70,15 @@ pub async fn echo_handler(
     (StatusCode::OK, Json(EchoResponse { echoed }))
 }
 
-// OpenAPI 文档定义
-#[derive(OpenApi)]
-#[openapi(
-    paths(health_handler, echo_handler),
-    components(schemas(EchoRequest, EchoResponse)),
-    info(
-        title = "My Echo API",
-        version = "1.0.0",
-        description = "A simple echo service with tracing"
-    )
-)]
-pub struct ApiDoc;
+// // OpenAPI 文档定义
+// #[derive(OpenApi)]
+// #[openapi(
+//     paths(health_handler, echo_handler),
+//     components(schemas(EchoRequest, EchoResponse)),
+//     info(
+//         title = "My Echo API",
+//         version = "1.0.0",
+//         description = "A simple echo service with tracing"
+//     )
+// )]
+// pub struct ApiDoc;

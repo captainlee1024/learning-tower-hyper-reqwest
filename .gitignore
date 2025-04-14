@@ -17,8 +17,11 @@ Cargo.lock
 .idea
 .vscode
 .DS_Store
+# env
 .env
 env
 
 prometheus-data
 grafana-data
+postgresql-data
+redis-data

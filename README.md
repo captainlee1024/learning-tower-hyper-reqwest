@@ -71,6 +71,124 @@ docker run -d \
   grafana/grafana:latest
 ```
 
+4、launch the postgres using docker:
+
+data directory for postgres:
+
+```bash
+chmod -R 777 postgresql-data
+```
+
+run postgres:
+
+```bash
+docker run -d \
+  --name postgres \
+  -e POSTGRES_PASSWORD=password \
+  --network host \
+  -v $(pwd)/conf/postgresql.conf:/etc/postgresql/postgresql.conf \
+  -v $(pwd)/postgresql-data:/var/lib/postgresql/data \
+  postgres \
+  -c config_file=/etc/postgresql/postgresql.conf
+```
+
+check the startup log:
+
+```bash
+docker logs postgres
+
+PostgreSQL Database directory appears to contain a database; Skipping initialization
+
+2025-04-14 10:05:03.269 GMT [1] LOG:  starting PostgreSQL 17.4 (Debian 17.4-1.pgdg120+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14) 12.2.0, 64-bit
+2025-04-14 10:05:03.269 GMT [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+2025-04-14 10:05:03.269 GMT [1] LOG:  listening on IPv6 address "::", port 5432
+2025-04-14 10:05:03.272 GMT [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2025-04-14 10:05:03.281 GMT [29] LOG:  database system was shut down at 2025-04-14 10:01:21 GMT
+2025-04-14 10:05:03.293 GMT [1] LOG:  database system is ready to accept connections
+
+```
+
+create the kv_store database:
+
+```bash
+psql -h localhost -U postgres -c "CREATE DATABASE kv_store;"
+```
+
+check the database:
+
+```bash
+psql -h localhost -U postgres -c "\l"
+
+# output
+                                                        数据库列表
+   名称    |  拥有者  | 字元编码 | Locale Provider |  校对规则  |   Ctype    | Locale | ICU Rules |       存取权限        
+-----------+----------+----------+-----------------+------------+------------+--------+-----------+-----------------------
+ kv_store  | postgres | UTF8     | libc            | en_US.utf8 | en_US.utf8 |        |           | 
+ postgres  | postgres | UTF8     | libc            | en_US.utf8 | en_US.utf8 |        |           | 
+ template0 | postgres | UTF8     | libc            | en_US.utf8 | en_US.utf8 |        |           | =c/postgres          +
+           |          |          |                 |            |            |        |           | postgres=CTc/postgres
+ template1 | postgres | UTF8     | libc            | en_US.utf8 | en_US.utf8 |        |           | =c/postgres          +
+           |          |          |                 |            |            |        |           | postgres=CTc/postgres
+(4 行记录)
+```
+
+5、launch Redis using docker:
+
+the data directory for Redis:
+
+```bash
+chmod -R 777 redis-data
+```
+
+run redis:
+
+```bash
+docker run -d \
+  --name redis \
+  -v $(pwd)/conf/redis.conf:/usr/local/etc/redis/redis.conf \
+  -v $(pwd)/redis-data:/data \
+  --network host \
+  redis \
+  redis-server /usr/local/etc/redis/redis.conf
+```
+
+check the startup log:
+
+```bash
+docker logs redis
+
+# output
+1:C 14 Apr 2025 11:09:10.831 # WARNING Memory overcommit must be enabled! Without it, a background save or replication may fail under low memory condition. Being disabled, it can also cause failures without low memory condition, see https://github.com/jemalloc/jemalloc/issues/1328. To fix this issue add 'vm.overcommit_memory = 1' to /etc/sysctl.conf and then reboot or run the command 'sysctl vm.overcommit_memory=1' for this to take effect.
+1:C 14 Apr 2025 11:09:10.831 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+1:C 14 Apr 2025 11:09:10.831 * Redis version=7.4.2, bits=64, commit=00000000, modified=0, pid=1, just started
+1:C 14 Apr 2025 11:09:10.831 * Configuration loaded
+1:M 14 Apr 2025 11:09:10.831 * Increased maximum number of open files to 1032 (it was originally set to 1024).
+1:M 14 Apr 2025 11:09:10.831 * monotonic clock: POSIX clock_gettime
+1:M 14 Apr 2025 11:09:10.832 # Failed to write PID file: Permission denied
+1:M 14 Apr 2025 11:09:10.832 * Running mode=standalone, port=6379.
+1:M 14 Apr 2025 11:09:10.832 * Server initialized
+1:M 14 Apr 2025 11:09:10.832 * Ready to accept connections tcp
+```
+
+check the redis server with redis-cli:
+
+```bash
+redis-cli -h 127.0.0.1 -p 6379 -a redis123456 PING
+Warning: Using a password with '-a' or '-u' option on the command line interface may not be safe.
+PONG
+```
+
+or
+
+```bash
+redis-cli -h 127.0.0.1 -p 6379     
+127.0.0.1:6379> AUTH redis123456
+OK
+127.0.0.1:6379> PING
+PONG
+127.0.0.1:6379> 
+```
+
 3、launch the echo server:
 
 ```bash

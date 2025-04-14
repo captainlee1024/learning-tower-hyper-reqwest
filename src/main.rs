@@ -1,5 +1,13 @@
 #![feature(duration_millis_float)]
 
+mod cache;
+mod db;
+mod error;
+mod kv_axum;
+mod kv_tower;
+mod models;
+mod open_api;
+
 mod app;
 mod appv2;
 mod init_opentelemetry;
@@ -9,6 +17,7 @@ mod middleware_tower;
 
 #[cfg(feature = "service-my")]
 use crate::app::echo;
+use std::env;
 // use futures::SinkExt;
 
 use hyper::server::conn::http1;
@@ -22,15 +31,18 @@ use std::time::Duration;
 // use hyper::server::Server;
 // use hyper::service::make_service_fn;
 #[cfg(feature = "service-axum")]
-use crate::appv2::ApiDoc;
-#[cfg(feature = "service-axum")]
 use crate::appv2::{AppState, echo_handler, health_handler};
+use crate::cache::CacheClient;
+use crate::db::DBClient;
 use crate::init_opentelemetry::init_tracing;
+#[cfg(feature = "service-axum")]
+use crate::open_api::ApiDoc;
 #[cfg(feature = "service-axum")]
 use axum::{
     Router,
     routing::{get, post},
 };
+use dotenvy::dotenv;
 use tokio::net::TcpListener;
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::Notify;
@@ -226,6 +238,7 @@ use utoipa_swagger_ui::SwaggerUi;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (otlp_tracer_provider, otlp_meter_provider) = init_tracing().await?;
 
+    dotenv().ok();
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     let listener = TcpListener::bind(addr).await?;
 
@@ -328,6 +341,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .layer(middleware_tower::auth::AuthLayer),
         ); // 添加 Tower 中间件
 
+    // 构建 kv service 的Router
+    #[cfg(all(feature = "service-axum"))]
+    // let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL");
+    // let redis_url = std::env::var("REDIS_URL").expect("REDIS_URL");
+    let db = Arc::new(DBClient::new(&env::var("DATABASE_URL")?).await?);
+    let cache = Arc::new(CacheClient::new(&env::var("REDIS_URL")?).await?);
+    let kv_app_state = kv_axum::AppState {
+        db: db.clone(),
+        cache: cache.clone(),
+    };
+
+    let kv_router = kv_axum::router(kv_app_state).layer(
+        ServiceBuilder::new()
+            .layer(middleware_tower::tracing::TracingLayer)
+            .layer(middleware_tower::metrics::MetricsLayer),
+    );
+
     #[cfg(all(feature = "service-axum"))]
     // 创建 Swagger UI 的 Router，不加中间件
     let swagger_router: Router = Router::new()
@@ -337,7 +367,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 3. 合并两个 Router
     let app: Router = Router::new()
         .merge(swagger_router) // Swagger UI 路由，不走中间件
-        .merge(api_router); // 业务路由，走中间件
+        .merge(api_router)
+        .merge(kv_router); // 业务路由，走中间件
 
     #[cfg(feature = "service-axum")]
     let axum_service = TowerToHyperService::new(app.into_service());
