@@ -2,7 +2,7 @@
 
 A simple echo server using hyper and tower
 
-## how to use:
+## how to use
 
 1、launch the Jaeger agent using docker:
 
@@ -189,7 +189,7 @@ PONG
 127.0.0.1:6379> 
 ```
 
-3、launch the echo server:
+6、launch the echo server:
 
 ```bash
 cargo run --no-default-features --features "service-axum middleware-tower"
@@ -198,7 +198,10 @@ cargo run --no-default-features --features "service-my middleware-my"
 cargo run --no-default-features --features "service-my middleware-tower"
 ```
 
-4、test with curl:
+7、test:
+
+test echo service
+test the tower-service feature:
 
 ```bash
 curl -v -X POST -H "Auth-Key: Bearer token" -d "hello world" http://127.0.0.1:3000
@@ -222,24 +225,71 @@ curl -v -X POST \
      http://127.0.0.1:3000/echo
 ```
 
-5、check the trace in Jaeger UI:
+test key-value store service
+
+test the tower-service feature:
+
+set key-value:
+
+```bash
+curl -v -X POST 'http://localhost:3000/kv' \     
+  -H 'Content-Type: application/json' \
+  -d '{"key": "keymy01", "value": "value-my01"}'
+```
+
+get key-value:
+
+```bash
+curl -v -X GET 'http://localhost:3000/kv/keymy01'
+```
+
+update key-value:
+
+```bash
+curl -v -X PUT 'http://localhost:3000/kv/keymy01' \
+  -H 'Content-Type: application/json' \
+  -d '"new value for keymy01"'
+```
+
+get key-value again:
+
+```bash
+curl -v -X GET 'http://localhost:3000/kv/keymy01'
+```
+
+delete key-value:
+
+```bash
+curl -v -X DELETE 'http://localhost:3000/kv/keymy01'
+```
+
+get key-value again:
+
+```bash
+curl -v -X GET 'http://localhost:3000/kv/keymy01'
+```
+
+test the axum router feature:
+using Swagger UI test the axum_kv_store_service.
+
+8、check the trace in Jaeger UI:
 
 [open Jaeger UI in browser](http://localhost:16686/)
 
 select the Service name `hyper-tower-service` and select the Operation name `request`, click `Find Traces` to see the
 traces.
 
-6、 check the metrics in prometheus:
+9、 check the metrics in prometheus:
 
 [open prometheus UI in browser](http://localhost:19090/)
 
 open metrics explorer, select `http_request_total`, `http_request_duration_seconds_bucket` ... to see the metrics.
 
-7、 check the metrics in grafana:
+10、 check the metrics in grafana:
 
 [open grafana UI in browser](http://localhost:13000/)
 
-add the prometheus data source: http://localhost:19090
+add the prometheus data source: <http://localhost:19090>
 
 create a new dashboard, add a new panel, select the prometheus data source, and select the metrics you want to see.
 
@@ -263,7 +313,7 @@ Grafana Chart Examples
         - Config: X-axis: `le` (bucket boundaries), Y-axis: count, unit: milliseconds
     - **Value**: Understand duration spread, e.g., most requests in low latency.
 
-8、test the graceful shutdown using ab:
+11、test the graceful shutdown using ab:
 
 install and check the ab:
 

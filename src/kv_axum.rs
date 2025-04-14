@@ -13,6 +13,7 @@ use axum::{
 use std::sync::Arc;
 use tracing::instrument;
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct AppState {
     pub db: Arc<DBClient>,
@@ -170,6 +171,7 @@ pub async fn delete_kv(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[allow(dead_code)]
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/kv", post(set_kv))

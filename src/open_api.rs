@@ -4,6 +4,7 @@ use crate::{
 };
 use utoipa::OpenApi;
 
+#[allow(dead_code)]
 #[derive(OpenApi)]
 #[openapi(
     paths(

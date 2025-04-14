@@ -16,6 +16,7 @@ mod middleware_for_my_service;
 mod middleware_tower;
 
 #[cfg(feature = "service-my")]
+#[allow(unused_imports)]
 use crate::app::echo;
 use std::env;
 // use futures::SinkExt;
@@ -239,6 +240,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (otlp_tracer_provider, otlp_meter_provider) = init_tracing().await?;
 
     dotenv().ok();
+    let db = Arc::new(DBClient::new(&env::var("DATABASE_URL")?).await?);
+    let cache = Arc::new(CacheClient::new(&env::var("REDIS_URL")?).await?);
+
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     let listener = TcpListener::bind(addr).await?;
 
@@ -284,6 +288,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .layer(middleware_for_my_service::timeout::timeout_layer())
         .service(service_fn(echo));
 
+    #[cfg(feature = "service-my")]
+    let svc = kv_tower::KvService::new(db.clone(), cache.clone());
     // 构建 Tower Service 使用通用的标准 Tower Service middleware
     #[cfg(all(feature = "service-my", feature = "middleware-tower"))]
     let t_service = ServiceBuilder::new()
@@ -292,9 +298,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .layer(middleware_tower::timeout::TimeoutLayer::new(
             Duration::from_millis(501),
         ))
-        .layer(middleware_tower::cache::CacheLayer)
-        .layer(middleware_tower::auth::AuthLayer)
-        .service(service_fn(echo));
+        // .layer(middleware_tower::cache::CacheLayer)
+        // .layer(middleware_tower::auth::AuthLayer)
+        // .service(service_fn(echo));
+        .service(service_fn(move |req| {
+            let svc = svc.clone();
+            async move {
+                kv_tower::serve_req(&svc, req)
+                    .await
+                    .or_else(|e| e.into_tower_response())
+            }
+        }));
     // TowerToHyperService<ServiceFn<fn(Request<Incoming>) ->impl Future<Output = Result<Response<BoxBody<Bytes, Error>>, Error>> + Sized>>>
 
     #[cfg(all(feature = "service-my"))]
@@ -345,13 +359,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(all(feature = "service-axum"))]
     // let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL");
     // let redis_url = std::env::var("REDIS_URL").expect("REDIS_URL");
-    let db = Arc::new(DBClient::new(&env::var("DATABASE_URL")?).await?);
-    let cache = Arc::new(CacheClient::new(&env::var("REDIS_URL")?).await?);
+    // let db = Arc::new(DBClient::new(&env::var("DATABASE_URL")?).await?);
+    // let cache = Arc::new(CacheClient::new(&env::var("REDIS_URL")?).await?);
     let kv_app_state = kv_axum::AppState {
         db: db.clone(),
         cache: cache.clone(),
     };
 
+    #[cfg(all(feature = "service-axum"))]
     let kv_router = kv_axum::router(kv_app_state).layer(
         ServiceBuilder::new()
             .layer(middleware_tower::tracing::TracingLayer)
