@@ -232,7 +232,7 @@ test the tower-service feature:
 set key-value:
 
 ```bash
-curl -v -X POST 'http://localhost:3000/kv' \     
+curl -v -X POST 'http://localhost:3000/kv' \
   -H 'Content-Type: application/json' \
   -d '{"key": "keymy01", "value": "value-my01"}'
 ```
