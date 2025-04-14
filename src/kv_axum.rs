@@ -84,6 +84,7 @@ pub async fn update_kv(
     Path(key): Path<String>,
     Json(value): Json<String>,
 ) -> Result<Json<KvPair>, AppError> {
+    // TODO: 这里更新会造成缓存脏读的问题，需要后续优化
     tracing::info!(target: "service::kv", %key, %value, "📥 incoming update request");
     if value.is_empty() || value.len() > 1000 {
         return Err(AppError::InvalidInput("Invalid value".into()));
